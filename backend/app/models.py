@@ -23,6 +23,10 @@ class Transaction(BaseModel):
     reason: str = ""
     rule_id: Optional[str] = None
     refund_category: Optional[str] = None
+    # Set only when the local text model tier decided (method "ml");
+    # keyword-rule rows leave both unset so existing consumers are unaffected.
+    confidence: Optional[float] = None
+    method: Optional[str] = None
     source: TransactionSource = "engine"
 
 

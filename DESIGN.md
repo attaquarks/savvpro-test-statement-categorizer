@@ -46,7 +46,8 @@ across word boundaries can't happen. Rules fire in a fixed order; first match wi
 | 4 | **Merchant rules** (≈60 curated merchants) | `ADOBE` → Software, `UBER` → Travel, `STAPLES` → Office Supplies… | debit → the merchant's spending category; **credit → Refund offsetting that merchant's category** (money back from a merchant you spent with — never new income). |
 | 5 | **Ambiguous marketplaces** | `AMAZON`, `AMZN`, `PAYPAL`, `WALMART`, `TARGET`, bare `APPLE` | **Needs Review**, with a reason that says why. A marketplace row could be supplies, equipment or personal; the engine refuses to guess. (`AMAZON WEB SERVICES` and `APPLE.COM` have specific rules that win first.) |
 | 6 | **Refund wording, no merchant** | `REFUND ISSUED` | **Needs Review** — clearly a refund, but the original expense is unknown, so the user must say what it offsets. |
-| 7 | **Fallback** | anything else | debit → Needs Review ("unrecognized merchant"); credit → Needs Review ("could be income or a refund"). |
+| 7 | **ML text model (debits only)** | `DELTA AIRLINES TKT 016441`, `MICROSOFT CORPORATION RENEWAL 9988123` | ordinary spending category **only if** the locally trained classifier clears `MIN_SCORE=0.65` and `MIN_MARGIN=0.15`; the row carries `method: "ml"` and a confidence. Skipped entirely when the model is unavailable. |
+| 8 | **Fallback** | anything else | debit → Needs Review ("unrecognized merchant"); credit → Needs Review ("could be income or a refund"). |
 
 Every decision carries a `reason` string (rendered in the UI) and a stable `rule_id`
 (e.g. `M-ADOBE`, `T-TRANSFER`, `A-AMAZON`). The engine is pure and deterministic: same
@@ -64,6 +65,43 @@ row in, same classification out, no hidden state.
   their own `Fees & Charges` category (a `FEE REVERSAL` credit offsets it).
 - **Uncertainty is surfaced, not smoothed over.** Needs-Review rows are colored, counted,
   and their amounts are *held out of every total* until a human assigns a category.
+
+### The ML tier: local text classification, nothing external
+
+The exact keyword tiers above miss ordinary spending wording that doesn't contain a known
+token (`DELTA AIRLINES …` when only `DELTA, AIR` is a keyword, `MICROSOFT CORPORATION
+RENEWAL …` when only `MICROSOFT, 365` is). Tier 7 closes part of that gap with a small
+scikit-learn model trained at first use, in-process, in well under a second:
+
+- **Training data is hand-labeled only**: every merchant rule's keyword sequence in
+  `rules.py` is a human label contract, plus ~50 curated noisy variants in
+  `training_data.py` (reference numbers, extra wording, suffixes). Engine *predictions*
+  and the unlabeled downloaded sample CSVs are **never** used as labels.
+- **Model**: description → lowercase, strip 4+-digit reference runs, punctuation → spaces
+  (merchant words kept) → `FeatureUnion` of word TF-IDF (1–2-grams) and `char_wb` TF-IDF
+  (3–5-grams) → `LogisticRegression(max_iter=1000, C=3.0)`.
+- **Gating**: auto-categorize a debit only when top score ≥ 0.65 **and** top-two margin
+  ≥ 0.15 (env: `ML_MIN_SCORE`, `ML_MIN_MARGIN`). Scores are screening signals, not
+  calibrated probabilities.
+- **Thresholds are validated, not guessed** (`backend/scripts/validate_ml.py`): 4-fold
+  CV over 102 hand-labeled examples. At the default `C=1.0` no held-out row clears 0.65
+  (0/75) — the tier would be dead code; at `C=30` wrong held-out predictions reach 0.75
+  and would slip through. `C=3.0` keeps every wrong held-out prediction ≤ 0.53 and every
+  deliberately-unfamiliar description ("JOES CAFE 9921", "CITY WATER UTILITY BILL", …)
+  ≤ 0.33, while ~15% of correct held-out rows still clear the gate; production training
+  (all examples) fires confidently on real wording variants (0.78, 0.86 on the two
+  noisy-depiction test rows).
+- **Fail-safe**: scikit-learn missing, too few labeled examples for a category
+  (< 3 → category excluded; < 2 usable categories → tier disabled), or any
+  training/inference error ⇒ the tier returns nothing and rows fall through to the
+  tiers above/below. An upload can never crash because of the ML tier.
+- **Semantics never come from the model**: it is consulted only for debits that reached
+  the fallback; transfers, card payments, refunds/fees and ambiguous marketplaces are all
+  decided earlier by rules regardless of how the model would score them.
+
+`backend/scripts/evaluate_ml.py` reproduces the numbers reported against the custom
+sample statement and (unlabeled, counts-only) any statement CSVs in the reviewer's
+Downloads folder.
 
 ## 4. Summary math
 

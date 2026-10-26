@@ -1,7 +1,8 @@
 # Statement Categorizer
 
 A local-first web app that reads a freelance designer's business bank/credit-card statements,
-categorizes every transaction for tax time with deterministic rules (no AI model), and shows
+categorizes every transaction for tax time with deterministic rules plus a small locally
+trained text classifier (no external AI, no LLM, nothing leaves the machine), and shows
 exactly **why** each row was classified the way it was — so unknown merchants land in
 **Needs Review** instead of being guessed.
 
@@ -25,6 +26,12 @@ immediately.
   Bad rows are reported as warnings, never silently dropped.
 - Deterministic rule engine with explicit merchant and transaction-type rules; every row
   carries a human-readable reason and a rule id.
+- A **locally trained text model** (scikit-learn TF-IDF + logistic regression, trained in
+  seconds at startup on hand-labeled examples) catches ordinary spending wording the exact
+  keyword rules miss — e.g. `DELTA AIRLINES TKT 016441` when the rules only know
+  `DELTA AIR`. It only fires on debits, only above conservative confidence gates
+  (`ML_MIN_SCORE=0.65`, `ML_MIN_MARGIN=0.15`), and degrades silently back to rules-only
+  if scikit-learn is missing. Rows it classifies carry `method: "ml"` plus a confidence.
 - Correct treatment of the tricky cases:
   - **Transfers** (to/from own accounts, card payments) are excluded from spending *and* income.
   - **Refunds** offset the spending category they belong to and never inflate income.

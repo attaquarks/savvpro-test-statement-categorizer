@@ -88,6 +88,22 @@ Session date: 2026-10-26. Numbers above are the owner-provided session figures; 
 session log lives in the ZCode app and was not committed (it can contain unrelated
 workspace context).
 
+## ML tier follow-up (later session)
+
+- The scikit-learn text classifier (`app/categorizer/ml.py`, `training_data.py`) was
+  written with ZCode/GLM assistance on a separate branch (`candidate-attaquarks-ml`).
+  The supplied token figures above cover the original build/session; per-line counts for
+  this follow-up were not re-measured against a new provider log.
+- The model itself is **classical ML trained in-process** (TF-IDF + logistic regression);
+  no LLM or external AI participates in classifying transactions, per the task's big rule.
+- The initial C=1.0 pipeline produced a dead tier (0/75 held-out rows clearing the 0.65
+  gate) — caught by the validation sweep (`backend/scripts/validate_ml.py`), which chose
+  C=3.0 with evidence; see DESIGN.md. During implementation, three corrupted lines
+  (stray tokens inside two test edits and a placeholder in the eval script) were caught
+  and fixed before committing; the 1000-row Downloads file exposed two parser gaps
+  (misspelled `Withdrawls` header; `00.00`-filled paired amount columns), each fixed with
+  a regression test.
+
 ## Data hygiene
 
 - No real bank statements, personal information, keys, tokens or passwords were used or

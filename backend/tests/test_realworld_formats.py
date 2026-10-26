@@ -220,3 +220,20 @@ def test_indian_drcr_layout_categorization():
 def test_headerless_fallback_requires_date_and_amount_shape():
     with pytest.raises(StatementFormatError):
         parse_csv(b"first,line,looks,nothing,like,dates\nsecond,line,also,not\n")
+
+
+def test_deposits_withdrawls_columns_filled_with_zeros():
+    # "1000 BT Records"-style layout: both columns present on every row, the
+    # unused one parked at 00.00. The signed-amount column pair must still
+    # work, and the misspelled "Withdrawls" header must be recognized.
+    data = (
+        "Date,Description,Deposits,Withdrawls,Balance\n"
+        '20-Aug-2020,Cheque,"3,391.02",00.00,"83,839.30"\n'
+        '21-Aug-2020,Grocery Store,00.00,"45.20","83,794.10"\n'
+        "22-Aug-2020,Salary,00.00,00.00,0.00\n"
+    ).encode()
+    outcome = parse_csv(data)
+    assert [t.amount_cents for t in outcome.transactions] == [339102, -4520]
+    # A row with no nonzero amount in either column is skipped with a reason,
+    # not silently dropped.
+    assert any("no amount in debit or credit column" in w for w in outcome.warnings)

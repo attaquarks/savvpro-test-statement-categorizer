@@ -57,7 +57,8 @@ DESCRIPTION_ALIASES = {
     "transaction",
 }
 AMOUNT_ALIASES = {"amt", "value", "amount usd", "signed amount"}
-DEBIT_ALIASES = {"debit amount", "money out", "withdrawal", "withdrawals"}
+# "...withdrawls" is the frequent misspelling (no "a") seen in real exports.
+DEBIT_ALIASES = {"debit amount", "money out", "withdrawal", "withdrawals", "withdrawl", "withdrawls"}
 CREDIT_ALIASES = {"credit amount", "money in", "deposit", "deposits"}
 # "DrCr" is the sign column in common Indian-bank exports (e.g. the widely
 # used Kaggle bank-transaction datasets): Db = debit, Cr = credit.
@@ -96,6 +97,20 @@ def sign_from_type(value: str) -> Optional[int]:
     if tokens & DEBIT_TYPE_WORDS:
         return -1
     return None
+
+
+def _column_cents(raw: str, label: str, problems: list[str]) -> Optional[int]:
+    """Parse one debit/credit cell to non-negative cents; None when absent.
+
+    Parse failures append to `problems` (one per row) and return None.
+    """
+    if not raw:
+        return None
+    try:
+        return abs(parse_amount(raw))
+    except ValueError as exc:
+        problems.append(f"{label}: {exc}")
+        return None
 
 
 def _decode(data: bytes) -> str:
@@ -312,20 +327,26 @@ def parse_csv(data: bytes, charge_sign: str = "negative") -> ParseOutcome:
             elif problems == [] and charge_sign == "positive":
                 amount_cents = -amount_cents
         else:
-            has_debit = bool(debit_raw)
-            has_credit = bool(credit_raw)
-            if has_debit and has_credit:
+            debit_cents = _column_cents(debit_raw, "debit column", problems)
+            credit_cents = _column_cents(credit_raw, "credit column", problems)
+            # A 00.00 filled-in cell is an empty column, not a zero charge:
+            # several exports (e.g. Kaggle "1000 BT Records") populate both
+            # columns on every row and park "00.00" in the unused one.
+            if debit_cents == 0:
+                debit_cents = None
+            if credit_cents == 0:
+                credit_cents = None
+            if debit_cents is not None and credit_cents is not None:
                 problems.append("row has both a debit and a credit value")
-            elif has_debit:
-                try:
-                    amount_cents = -abs(parse_amount(debit_raw))
-                except ValueError as exc:
-                    problems.append(f"debit column: {exc}")
-            elif has_credit:
-                try:
-                    amount_cents = abs(parse_amount(credit_raw))
-                except ValueError as exc:
-                    problems.append(f"credit column: {exc}")
+            elif debit_cents is not None:
+                amount_cents = -debit_cents
+            elif credit_cents is not None:
+                amount_cents = credit_cents
+            elif debit_raw or credit_raw:
+                # A parse problem above already explains the skip; a cell that
+                # is only "00.00" has no usable amount either way.
+                if not problems:
+                    problems.append("no amount in debit or credit column")
             else:
                 problems.append("no amount in debit or credit column")
 

@@ -1,8 +1,11 @@
 """The categorization engine — plain, deterministic Python.
 
-This module is "the brain" required by the task: no machine learning and
-no external AI model, just ordered keyword rules whose decision can be
-explained for every row.
+This module is "the brain" required by the task: no external AI model and
+no LLM ever decides. Decisions come from ordered keyword rules whose
+reasoning can be explained for every row, plus — for ordinary spending
+categories only — a small locally trained text model (app.categorizer.ml)
+built from the same hand-written label contracts. It starts disabled and
+fails safe to the keyword tiers.
 
 Decision order (first match wins):
 
@@ -18,14 +21,18 @@ Decision order (first match wins):
 5. Ambiguous merchants -> Needs Review (never guess on marketplaces).
 6. Refund wording      -> credit containing REFUND/REVERSAL without a
                           recognized merchant goes to Needs Review.
-7. Fallback            -> Needs Review.
+7. ML text model       -> on a debit only, an ordinary spending category
+                          when the locally trained classifier clears the
+                          conservative MIN_SCORE / MIN_MARGIN gates
+                          (result carries confidence + method="ml").
+8. Fallback            -> Needs Review.
 """
 
 from dataclasses import dataclass
 
 from .. import categories as cat
 from ..parsing.base import ParseOutcome, RawTransaction
-from . import rules
+from . import ml, rules
 
 
 @dataclass
@@ -35,6 +42,8 @@ class Classification:
     reason: str
     rule_id: str | None = None
     refund_category: str | None = None
+    confidence: float | None = None
+    method: str | None = None
 
 
 def classify(description: str, amount_cents: int) -> Classification:
@@ -135,7 +144,25 @@ def classify(description: str, amount_cents: int) -> Classification:
             refund.rule_id,
         )
 
-    # 7. Fallback: anything unrecognized goes to Needs Review.
+    # 7. Ordinary spending categories: locally trained text model (debits
+    #    only — credits keep the refund/income decisions of the tiers above).
+    #    The suggestion is screenable evidence, not a guarantee, so it must
+    #    clear conservative gates; otherwise the row stays in review.
+    suggestion = ml.suggest(description) if is_debit else None
+    if suggestion is not None and (
+        suggestion.confidence >= ml.MIN_SCORE and suggestion.margin >= ml.MIN_MARGIN
+    ):
+        return Classification(
+            suggestion.category,
+            False,
+            f"Locally trained text model matched {suggestion.category} wording "
+            f"(confidence {suggestion.confidence:.2f}, margin {suggestion.margin:.2f}).",
+            "ML",
+            confidence=round(suggestion.confidence, 4),
+            method="ml",
+        )
+
+    # 8. Fallback: anything unrecognized goes to Needs Review.
     if is_credit:
         return Classification(
             cat.NEEDS_REVIEW,
@@ -171,6 +198,8 @@ def categorize_statement(outcome: ParseOutcome) -> list:
                 reason=result.reason,
                 rule_id=result.rule_id,
                 refund_category=result.refund_category,
+                confidence=result.confidence,
+                method=result.method,
                 source="engine",
             )
         )
