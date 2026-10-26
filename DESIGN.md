@@ -200,3 +200,58 @@ Tool UI — Operate mode: scanability, familiarity, restraint. One visual world:
 - US-style ambiguous dates default to month/day/year; ISO is the documented primary.
 - Single-user, no persistence, no auth — scoped as a local tool for this assessment.
 - 5 MB / 20,000-row upload guardrails.
+
+## 9. Future work: a categorizer that learns from its user
+
+The ML tier (section 3) currently learns from one fixed, hand-labeled corpus, so it is
+static: it understands *general* freelance spending, not *this user's* habits. The
+natural evolution is a feedback loop — **every category the user picks in a review row
+is a training label they hand-annotated for free** — and the architecture already has
+the hooks for it:
+
+```
+Upload → classify (rules + ML) → user fixes rows in review
+      → corrections saved to a small local ledger      ← new persistence
+      → scheduled retrain script (offline, local)      ← new job
+      → validated model promoted → next upload is smarter
+```
+
+How each step would integrate with what exists today:
+
+1. **Capture corrections at the moment they happen.** When the user assigns a category
+   from the dropdown, the frontend already sends the corrected row (with
+   `source: "user"`) to `POST /api/summary`. A future `POST /api/feedback` — or an
+   optional flag on the summary call — would append one record to a correction ledger:
+   `(normalized description, chosen category, timestamp, amount sign, which tier
+   decided, decision-time confidence)`. Storing the decision context matters: a
+   correction that overrode a low-confidence ML guess is a strong signal; one that
+   changed a semantic tier (transfer/refund) is not trainable data and is skipped.
+2. **Keep semantics untouchable.** Only ordinary spending categories flow into the
+   ledger. Transfers, refunds, fees and ambiguous marketplaces keep their rule-tier
+   meaning regardless of what the user picked, so user feedback can never teach the
+   model to treat a refund as income.
+3. **Retrain offline with the same gates.** A script (it would extend
+   `backend/scripts/validate_ml.py`, which already exists for exactly this purpose)
+   merges the hand-labeled base corpus with the user's ledger, runs the same 4-fold
+   validation, and **promotes a new model only if** held-out accuracy does not regress,
+   the unfamiliar-junk corpus still fails the gates, and the user's own recurring
+   merchants now clear `MIN_SCORE` / `MIN_MARGIN`. A model that would make things worse
+   is never promoted; the previous version keeps serving.
+4. **Serving changes nothing.** `ml.get_classifier()` would simply load the newest
+   promoted model instead of training the base corpus. The engine, tiers, thresholds
+   and fail-safe behavior stay identical; last month's `JOES CAFE 9921` row, taught
+   once by the user, auto-fills next month — while the user's *own* wordings for their
+   real merchants, which no generic rule can ever enumerate, accrue in the ledger.
+5. **Stay local-first.** The ledger is the one new persisted artifact: a small, local,
+   human-readable file (JSONL) or SQLite table next to the model, explicitly documented
+   and deletable, so a user can wipe everything the app learned with one file delete.
+   Nothing leaves the machine — the same privacy stance as the stateless API.
+
+This was deliberately **not built in this assessment**, and the reason is honest rather
+than cosmetic: a learning loop is only real if it learns from *real* corrections
+produced by real usage, collected and retrained against over time. Within the 12-hour
+build window there was no usage history to learn from, no second statement-cycle to
+measure "the review pile shrank by N%" against — and a simulated feedback loop trained
+on invented corrections would just be theater. The hand-labeled ML tier shipped instead
+because it works on day one; the ledger + retrain loop above is the designed next step
+for when the app has a user to learn from.

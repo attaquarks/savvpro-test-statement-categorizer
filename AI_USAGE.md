@@ -198,6 +198,40 @@ repo keeps a single clean line of work.
    on my machine instead of just the dev server. Harmless, but noted as a real-mess
    moment.
 
+## Where I see this app going next
+
+There is one thing about the app today that I keep noticing when I use it: every time I
+fix a row in Needs Review — I tell the app "this JOES CAFE place is Meals", "this
+SUNNY DESIGN STUDIO invoice is my Professional Services expense" — that teaching moment
+disappears the second I close the tab, because the app is deliberately stateless. Next
+month, on my next statement, I am the same stranger to it, and I fix the same rows all
+over again.
+
+That is the gap I want the ML layer to close in a future version. The idea in my head:
+
+- when I pick a category in a review row, the app would **save that correction** —
+  description, my chosen category, what the engine had guessed — as a small local
+  record, instead of letting it evaporate;
+- a **retrain script** would periodically merge those saved corrections into the local
+  scikit-learn model, using the same validation gates it already uses today, so the
+  model only gets promoted if it is genuinely better;
+- and then the next statement classifies itself: the cafes, gyms, software and client
+  invoices *I* personally labeled come back pre-categorized, and my review pile shrinks
+  every month until only genuinely new merchants are left in it.
+
+In other words: the app would stop being generic. It would grow into *my* categorizer —
+learning the specific patterns, wording and recurring merchants of the one person who
+uses it, which is exactly the knowledge that no fixed rule table (and no general
+training set) can ever contain.
+
+I did not build this in this session, and that is a deliberate call I made with the
+agent rather than a shortcut we forgot: real learning needs real data collection and
+retraining happening together, over weeks of my actual statements and corrections.
+Inside the 12-hour build limit there was no usage history to train on, and a
+simulated learning loop trained on invented corrections would have been dishonest
+theater. The architecture sketch for exactly how this plugs into the existing engine,
+API and ML tier is written up in `DESIGN.md`, section 9.
+
 ## Token usage and cost
 
 Full-session figures for the ZCode agent (model GLM 5.3 Flash), as reported by the

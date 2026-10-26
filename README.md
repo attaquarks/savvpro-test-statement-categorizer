@@ -44,6 +44,13 @@ immediately.
 - Filters (All / Needs review / Transfers / Refunds / Income) plus text search.
 - Empty, loading, error and warning states throughout. All sample data is fake.
 
+**Future work:** a learning loop where every category the user picks in a review row is
+saved locally and periodically folded into the ML model, so a month of corrections trains
+the app to pre-categorize the *next* statement — the reviewer's review pile shrinking as
+the app learns their specific merchants. Sketched for the current architecture in
+[DESIGN.md §9](DESIGN.md) (not built here: it needs real usage data collected over time,
+which a 12-hour build cannot produce).
+
 | Upload | Mobile |
 | --- | --- |
 | ![Upload state](docs/screenshots/upload-empty.png) | ![Mobile results](docs/screenshots/results-mobile.png) |
