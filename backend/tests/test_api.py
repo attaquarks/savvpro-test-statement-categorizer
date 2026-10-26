@@ -180,6 +180,61 @@ def test_summary_recompute_after_user_override():
     assert office["spending_cents"] == 6230 + 8642
 
 
+def test_upload_type_column_bank_export_is_accepted():
+    """Chase-style all-positive amounts + Type column (previously rejected)."""
+    content = (
+        "Date,Description,Type,Amount\n"
+        "2026-03-02,ADOBE CREATIVE CLOUD,DEBIT,54.99\n"
+        "2026-03-02,INVOICE PAYMENT ACME CORP,CREDIT,2400.00\n"
+        "2026-03-03,TRANSFER TO SAVINGS,DEBIT,2000.00\n"
+    )
+    response = client.post(
+        "/api/upload",
+        files={"file": ("chase.csv", content.encode("utf-8"), "text/csv")},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    by_desc = {t["description"]: t for t in body["transactions"]}
+    assert by_desc["ADOBE CREATIVE CLOUD"]["amount_cents"] == -5499
+    assert by_desc["ADOBE CREATIVE CLOUD"]["category"] == "Software & Subscriptions"
+    assert by_desc["TRANSFER TO SAVINGS"]["category"] == "Transfer"
+    assert body["summary"]["total_income_cents"] == 240000
+
+
+def test_upload_amex_style_needs_charge_sign_option():
+    """Charges-positive exports (some Amex files) only work with the option."""
+    content = (
+        "Date,Description,Amount\n"
+        "2026-03-02,ADOBE CREATIVE CLOUD,54.99\n"
+        "2026-03-03,UBER *TRIP HELP.UBER.COM,23.45\n"
+    )
+    rejected = client.post(
+        "/api/upload",
+        files={"file": ("amex.csv", content.encode("utf-8"), "text/csv")},
+    )
+    assert rejected.status_code == 400
+    assert "Charges are positive" in rejected.json()["detail"]
+
+    accepted = client.post(
+        "/api/upload",
+        files={"file": ("amex.csv", content.encode("utf-8"), "text/csv")},
+        data={"charge_sign": "positive"},
+    )
+    assert accepted.status_code == 200
+    by_desc = {t["description"]: t for t in accepted.json()["transactions"]}
+    assert by_desc["ADOBE CREATIVE CLOUD"]["amount_cents"] == -5499
+
+
+def test_upload_rejects_invalid_charge_sign():
+    response = client.post(
+        "/api/upload",
+        files={"file": ("ok.csv", SMALL_CSV.encode("utf-8"), "text/csv")},
+        data={"charge_sign": "sideways"},
+    )
+    assert response.status_code == 400
+    assert "charge_sign" in response.json()["detail"]
+
+
 def test_sample_csv_endpoint_serves_the_file():
     response = client.get("/api/sample/csv")
     assert response.status_code == 200

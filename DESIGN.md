@@ -90,9 +90,25 @@ Full user-facing spec in the README. Design decisions worth recording:
 - **Amounts parse to integer cents** at the boundary; every quirk (`$1,234.56`,
   `(54.99)`, `54.99-`, `54.99 DR`) is normalized there and nowhere else.
 - **Cardinal rule: never guess a sign convention.** If a single-`Amount` CSV parses and
-  every amount is positive, the file is rejected with an explanation (that pattern means
-  an unsigned export; misreading it would flip every category). Two-column
-  `Debit`/`Credit` exports are the supported alternative.
+  every amount is positive with no way to know which rows are debits (no Type column, no
+  Debit/Credit pair), the file is rejected with an explanation (that pattern means an
+  unsigned export; misreading it would flip every category). Files that *do* carry side
+  information are handled natively:
+  - a **Type column** (Chase-style) whose Debit/Credit/Withdrawal/Deposit wording
+    determines the sign; genuinely two-sided values (`CHECK`, `PAYMENT`) are never
+    guessed, and a file whose signs remain unknowable is still rejected;
+  - an explicit **"Charges are positive" upload option** for the opposite convention
+    (some American Express exports list charges positive, payments negative). This is a
+    user decision, not a heuristic — no heuristic can distinguish an inverted mixed-sign
+    file from a normal one without guessing. Mixed-sign files that *look* inverted
+    (negative amounts on refund/payment lines) parse with a pointed warning so signed
+    files keep working;
+  - a strictly-shaped **headerless fallback** for Wells Fargo-style exports
+    (`Date, Amount, Check number, Description` — every row must have a parseable date in
+    column 1 and amount in column 2, or the fallback declines and the normal error fires).
+- **Two-pass header matching**: exact names (`Description`, `Amount`, `Type`) win before
+  aliases (`Details`, `Amt`, …), so Chase's `Details` column is not mistaken for the
+  description.
 - **Malformed rows degrade loudly**: the row is skipped, a warning with the file line
   number reaches the UI banner; structural failures (no header, zero usable rows) are
   distinct 400/422 responses with actionable messages.

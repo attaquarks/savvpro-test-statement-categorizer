@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 
-export default function UploadPanel({ loading, error, onFile, onSample }) {
+export default function UploadPanel({ loading, error, onFile, onSample, chargeSign, onChargeSignChange }) {
   const inputRef = useRef(null)
   const [dragOver, setDragOver] = useState(false)
 
@@ -82,16 +82,34 @@ export default function UploadPanel({ loading, error, onFile, onSample }) {
         </button>
       </div>
 
+      <div className="samples">
+        <label htmlFor="charge-sign">Amounts in this file</label>
+        <select
+          id="charge-sign"
+          className="inline-select"
+          value={chargeSign}
+          disabled={loading}
+          onChange={(e) => onChargeSignChange(e.target.value)}
+        >
+          <option value="negative">Expenses are negative (standard)</option>
+          <option value="positive">Charges are positive (e.g. some Amex exports)</option>
+        </select>
+      </div>
+
       <details className="format-help">
         <summary>Which statement format does this support?</summary>
         <div className="format-help__body">
           <p>
             <strong>CSV</strong> — a header row with <code>Date</code>, <code>Description</code>{' '}
             and a signed <code>Amount</code> column (expenses negative, credits positive).
-            Separate <code>Debit</code>/<code>Credit</code> columns, a preamble above the header,
-            extra columns, <code>$</code>/<code>,</code> formatting and <code>(1,000.00)</code>{' '}
-            negatives are all handled. Rows that cannot be parsed are reported, not silently
-            dropped.
+            Also handled automatically: separate <code>Debit</code>/<code>Credit</code>{' '}
+            columns (Capital One, Citi), a <code>Type</code> column with Debit/Credit values
+            on positive amounts (Chase), headerless Wells Fargo-style rows
+            (<code>Date, Amount, …, Description</code>), a preamble above the header, extra
+            columns, <code>$</code>/<code>,</code> formatting and <code>(1,000.00)</code>{' '}
+            negatives. If your bank lists <em>charges as positive</em> (e.g. some American
+            Express exports), pick that option under “Amounts in this file”. Rows that
+            cannot be parsed are reported, not silently dropped.
           </p>
           <pre>{`Date,Description,Amount
 2026-03-02,ADOBE CREATIVE CLOUD,-54.99

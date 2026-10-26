@@ -21,6 +21,7 @@ export default function App() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [updatingSummary, setUpdatingSummary] = useState(false)
+  const [chargeSign, setChargeSign] = useState('negative')
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
 
@@ -40,7 +41,7 @@ export default function App() {
     setError('')
     setNotice('')
     try {
-      const result = await uploadStatement(file)
+      const result = await uploadStatement(file, chargeSign)
       setData(result)
       setFilter('all')
       setSearch('')
@@ -151,7 +152,14 @@ export default function App() {
       </header>
 
       {phase !== 'ready' && (
-        <UploadPanel loading={phase === 'loading'} error={error} onFile={processFile} onSample={loadSample} />
+        <UploadPanel
+          loading={phase === 'loading'}
+          error={error}
+          onFile={processFile}
+          onSample={loadSample}
+          chargeSign={chargeSign}
+          onChargeSignChange={setChargeSign}
+        />
       )}
 
       {phase === 'ready' && data && (

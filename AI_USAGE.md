@@ -50,6 +50,15 @@ the ZCode agent under the user's direction; no code was copied from another huma
 7. **Design-time catch (before any test):** Zelle was shortlisted as a *transfer* keyword;
    looking at the sample row `ZELLE PAYMENT FROM <client>` showed that would misfile
    client income as a transfer, so the keyword was dropped rather than special-cased.
+8. **First real-world feedback broke the parser** — the user's own bank exports were
+   rejected with "Every amount in this file is positive". The initial version only
+   understood the documented signed format and Debit/Credit column pairs. The fix
+   (driven by this user feedback) added support for Chase-style `Type` columns,
+   headerless Wells Fargo-style exports, an explicit "Charges are positive" option for
+   Amex-style conventions, and a warning (instead of silence) for files that look
+   inverted. The catch: format-accurate fixtures of major bank layouts
+   (`backend/tests/fixtures/realworld/`, synthetic data) are now part of the test suite,
+   plus browser end-to-end proofs (`docs/screenshots/realworld-*.png`).
 
 ## Token usage
 

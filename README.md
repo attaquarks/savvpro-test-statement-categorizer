@@ -89,18 +89,46 @@ Date,Description,Amount
 2026-03-02,ADOBE CREATIVE CLOUD,-54.99
 2026-03-02,INVOICE PAYMENT ACME CORP,2400.00
 ```
-
-- **Amounts are signed**: expenses negative, credits positive. Alternatives tolerated:
-  separate `Debit`/`Credit` columns; currency symbols and thousands separators;
-  parentheses or trailing minus for negatives; `CR`/`DR` suffixes.
+- Amounts are signed (expenses negative, credits positive) — **plus the real bank export
+  layouts**, handled automatically (all data in tests is synthetic):
+  - **Debit/Credit column pair** (Capital One, Citi)
+  - **Type column** on positive amounts, Debit/Credit/Withdrawal/Deposit-style values
+    (Chase). Genuinely two-sided values like `CHECK` are never guessed.
+  - **Headerless Wells Fargo-style rows** (`Date, Amount, Check number, Description`)
+  - currency symbols and thousands separators; parentheses or trailing minus for
+    negatives; `CR`/`DR` suffixes
+  - If the file lists **charges as positive** (e.g. some American Express exports —
+    the opposite of the usual convention), select **"Charges are positive"** on the
+    upload screen; mixed-sign files of this kind parse with a warning instead of a
+    rejection.
 - **Date** formats: `2026-03-14` (primary), `2026/03/14`, `03/14/2026`, `03/14/26`,
   `14-Mar-2026`, `14 Mar 2026`, `Mar 14, 2026`. Ambiguous numeric dates read as US
   month/day/year.
 - Tolerated extras: a preamble above the header, additional columns (ignored), quoted
   fields, `;` or tab delimiters, UTF-8 (with BOM) / CP1252 encoding.
-- Files where *every* amount is positive are rejected with an explanation — the parser
-  refuses to guess the sign convention rather than miscategorize the whole statement.
+- Files where sign still cannot be determined (all-positive, no Type column, no
+  Debit/Credit pair) are rejected with an explanation — the parser refuses to guess
+  rather than miscategorize the whole statement.
 - Unparseable rows are skipped and reported as warnings in the UI.
+
+#### Bank export layouts verified (synthetic data only)
+
+The parser is exercised against format-accurate copies of major US banks' CSV exports —
+the layouts, not anyone's actual data (see the repo rules: no real statements, no real
+personal details). Fixtures live in `backend/tests/fixtures/realworld/` and are proven
+both by unit/API tests and by end-to-end browser runs:
+
+| Bank-style layout | Columns / convention | Supported how |
+| --- | --- | --- |
+| Chase card/checking | `Details, Posting Date, Description, Amount (signed), Type, Balance, …` | Automatic (Type corroborates signs) |
+| Capital One card | `Transaction Date, Posted Date, Card No., Description, Category, Debit, Credit` | Automatic (Debit/Credit pair) |
+| Citi card | `Status, Date, Description, Debit, Credit` | Automatic (Debit/Credit pair) |
+| Discover card | `Trans. Date, Post Date, Description, Amount (signed), Category` | Automatic (signed) |
+| American Express | Charges listed **positive**, payments negative | **"Charges are positive"** upload option — never auto-guessed |
+| Wells Fargo checking | Headerless rows: `Date, Amount, Check number, Description` | Automatic (strictly shaped headerless fallback) |
+
+Screenshots of the app processing the first, second and last of these through the real
+UI: `docs/screenshots/realworld-*.png` (fake data).
 
 ### PDF
 

@@ -10,9 +10,10 @@ async function handleResponse(res) {
   throw new Error(message)
 }
 
-export async function uploadStatement(file) {
+export async function uploadStatement(file, chargeSign = 'negative') {
   const form = new FormData()
   form.append('file', file)
+  form.append('charge_sign', chargeSign)
   const res = await fetch('/api/upload', { method: 'POST', body: form })
   return handleResponse(res)
 }

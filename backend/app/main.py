@@ -8,7 +8,7 @@ totals. Nothing is persisted.
 
 from pathlib import Path
 
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -63,8 +63,17 @@ def health():
 
 
 @app.post("/api/upload", response_model=UploadResponse)
-async def upload_statement(file: UploadFile = File(...)):
-    """Parse and categorize an uploaded statement (CSV or text PDF)."""
+async def upload_statement(
+    file: UploadFile = File(...),
+    charge_sign: str = Form("negative"),
+):
+    """Parse and categorize an uploaded statement (CSV or text PDF).
+
+    charge_sign selects how plain Amount columns should be read:
+    "negative" (default — expenses negative) or "positive" (charges listed
+    positive, e.g. some American Express exports). Debit/Credit and Type
+    columns are detected automatically and ignore this option.
+    """
     data = await file.read(MAX_UPLOAD_BYTES + 1)
     if not data:
         raise EmptyFileError("The uploaded file is empty.")
@@ -72,7 +81,7 @@ async def upload_statement(file: UploadFile = File(...)):
         raise FileTooLargeError("File exceeds the 5 MB upload limit.")
 
     filename = file.filename or "statement"
-    outcome = parse_statement(filename, data)
+    outcome = parse_statement(filename, data, charge_sign=charge_sign)
     transactions = categorize_statement(outcome)
 
     return UploadResponse(
