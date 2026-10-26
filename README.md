@@ -1,83 +1,176 @@
-# Step-by-Step Guide: How to Fork, Clone, and Submit Your Assessment
+# Statement Categorizer
 
-**Repository:** https://github.com/savvpro/savvpro-test-statement-categorizer
+A local-first web app that reads a freelance designer's business bank/credit-card statements,
+categorizes every transaction for tax time with deterministic rules (no AI model), and shows
+exactly **why** each row was classified the way it was — so unknown merchants land in
+**Needs Review** instead of being guessed.
 
----
+![Results view](docs/screenshots/results-desktop.png)
 
-## Step 1: Fork the Repository
+## The use case
 
-1. Go to the repository: https://github.com/savvpro/savvpro-test-statement-categorizer
-2. Click the **Fork** button in the top-right corner.
-3. This will create a copy of the repository in your GitHub account.
+A freelance designer sorts a business card statement once a quarter. The app puts
+`ADOBE CREATIVE CLOUD` under **Software & Subscriptions**, `UBER *TRIP` under **Travel**,
+keeps `TRANSFER TO BUSINESS SAVINGS` out of spending entirely, books a `REFUND ADOBE`
+credit as a refund that offsets software spending (not new income), and sends
+`JOES CAFE 9921` — a merchant it does not know — to **Needs Review**. At the end the user
+sees a total per category and fixes the review rows with two clicks; the summary updates
+immediately.
 
----
+## Features
 
-## Step 2: Clone Your Fork
+- Upload a **CSV** or **text-based PDF** statement (drag & drop or file picker, 5 MB limit).
+- Parsing that tolerates real-world exports: BOM/CRLF, preamble lines, extra columns,
+  semicolon delimiters, `$1,234.56` / `(54.99)` / `54.99 DR` amounts, several date formats.
+  Bad rows are reported as warnings, never silently dropped.
+- Deterministic rule engine with explicit merchant and transaction-type rules; every row
+  carries a human-readable reason and a rule id.
+- Correct treatment of the tricky cases:
+  - **Transfers** (to/from own accounts, card payments) are excluded from spending *and* income.
+  - **Refunds** offset the spending category they belong to and never inflate income.
+  - **Fees** (including fee reversals) are their own category.
+  - **Ambiguous marketplaces** (Amazon, PayPal, …) are never auto-categorized.
+  - Anything unrecognized goes to **Needs Review** and is held out of the totals.
+- Summary: net spending (gross − refunds), income, transfers excluded, count/amount held
+  for review, and a per-category table with spending / refunds / net.
+- Fix any row's category from a dropdown; totals recompute immediately.
+- Filters (All / Needs review / Transfers / Refunds / Income) plus text search.
+- Empty, loading, error and warning states throughout. All sample data is fake.
 
-1. Open your forked repository in your GitHub account.
-2. Click the green **Code** button and copy the URL.
-3. Run the following commands:
+| Upload | Mobile |
+| --- | --- |
+| ![Upload state](docs/screenshots/upload-empty.png) | ![Mobile results](docs/screenshots/results-mobile.png) |
 
-```bash
-git clone https://github.com/your-username/savvpro-test-statement-categorizer.git
-cd savvpro-test-statement-categorizer
-```
+## Quickstart
 
----
+Prerequisites: **Python 3.12+** and **Node 20+**.
 
-## Step 3: Read the Task
-
-Open and read **TASK.md** carefully before writing any code.
-
-- TASK.md URL: https://github.com/savvpro/savvpro-test-statement-categorizer/blob/main/TASK.md
-
----
-
-## Step 4: Create a New Branch
-
-Branch pattern: `candidate-<your-github-username>`
-
-```bash
-git checkout -b candidate-<your-github-username>
-```
-
-**Example:**
-```bash
-git checkout -b candidate-johndoe
-```
-
----
-
-## Step 5: Complete the Task
-
-Build the full application on your branch.
-
----
-
-## Step 6: Push Your Branch
+### 1. Backend
 
 ```bash
-git add .
-git commit -m "feat: complete statement-categorizer assessment"
-git push origin candidate-<your-github-username>
+cd backend
+python -m venv .venv
+# Windows (Git Bash): source .venv/Scripts/activate  ·  macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+uvicorn app.main:app --port 8000
 ```
 
+### 2. Frontend (development)
+
+In a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5173, /api requests are proxied to :8000
+```
+
+### Single-process mode (no Node needed at runtime)
+
+Build the frontend once; the FastAPI app then serves the built UI from port 8000 directly:
+
+```bash
+cd frontend && npm install && npm run build
+cd ../backend && uvicorn app.main:app --port 8000
+# open http://127.0.0.1:8000
+```
+
+The UI offers **Load sample CSV / Load sample PDF** buttons backed by
+`sample-statements/` — all fake data, safe to explore with.
+
+## Documented statement format
+
+### CSV (preferred)
+
+A header row plus `Date`, `Description`, and a signed `Amount` column:
+
+```csv
+Date,Description,Amount
+2026-03-02,ADOBE CREATIVE CLOUD,-54.99
+2026-03-02,INVOICE PAYMENT ACME CORP,2400.00
+```
+
+- **Amounts are signed**: expenses negative, credits positive. Alternatives tolerated:
+  separate `Debit`/`Credit` columns; currency symbols and thousands separators;
+  parentheses or trailing minus for negatives; `CR`/`DR` suffixes.
+- **Date** formats: `2026-03-14` (primary), `2026/03/14`, `03/14/2026`, `03/14/26`,
+  `14-Mar-2026`, `14 Mar 2026`, `Mar 14, 2026`. Ambiguous numeric dates read as US
+  month/day/year.
+- Tolerated extras: a preamble above the header, additional columns (ignored), quoted
+  fields, `;` or tab delimiters, UTF-8 (with BOM) / CP1252 encoding.
+- Files where *every* amount is positive are rejected with an explanation — the parser
+  refuses to guess the sign convention rather than miscategorize the whole statement.
+- Unparseable rows are skipped and reported as warnings in the UI.
+
+### PDF
+
+Text-based exports with one transaction per line:
+
+```
+2026-03-02  ADOBE CREATIVE CLOUD  -54.99
+```
+
+Non-matching lines (titles, column headers, page numbers) are ignored. **Scanned/image PDFs
+are not supported** and are rejected with a clear message — the parser never OCRs.
+
+## API
+
+Base URL `http://127.0.0.1:8000`; interactive docs at `/docs`. Amounts travel as integer
+cents (`amount_cents`), signed: expenses negative, credits positive.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/health` | Liveness check |
+| `POST` | `/api/upload` | Multipart `file` (`.csv`/`.pdf`) → parsed transactions, reasons, summary, warnings |
+| `POST` | `/api/summary` | Recompute totals from the current transaction list (after user corrections) |
+| `GET` | `/api/sample/csv` | Download the sample CSV statement |
+| `GET` | `/api/sample/pdf` | Download the sample PDF statement |
+
+Errors are JSON `{"detail": "…"}` with meaningful status codes: `400` malformed / empty,
+`413` over 5 MB, `415` unsupported type, `422` readable file with zero usable transactions.
+
+## Tests
+
+```bash
+cd backend
+.venv/Scripts/python -m pytest        # Windows
+python -m pytest                      # macOS/Linux
+```
+
+99 tests cover amount/date parsing, CSV variants (debit/credit columns, BOM, preamble,
+malformed rows, unsigned exports), PDF parsing (generated test PDFs, scanned-PDF refusal),
+every rule tier of the engine (known/unknown/ambiguous merchants, refunds, transfers, fees,
+income, signed amounts), summary math (refund netting, transfer exclusion, overrides), and
+the HTTP API (success, error, and total-verification cases).
+
+## Project structure
+
+```
+backend/
+  app/
+    parsing/        # CSV + PDF parsers, amount/date handling, user-facing errors
+    categorizer/    # rule tables + deterministic engine ("the brain")
+    models.py       # Pydantic schemas (transactions, summary)
+    summarizer.py   # totals by category, refund/transfer treatment
+    main.py         # FastAPI app, serves frontend/dist when present
+  tests/            # pytest suite
+  scripts/make_sample_pdf.py
+frontend/
+  src/              # React + Vite app (components, styles)
+sample-statements/  # fake CSV + PDF sample data
+docs/screenshots/
+```
+
+## Privacy
+
+The app runs entirely locally: statements are parsed in memory, nothing is stored, and no
+third-party service is called. `sample-statements/` contains fake data only. Do not commit
+real statements, keys or tokens.
+
 ---
 
-## Step 7: Create a Pull Request
-
-1. Go to your **forked** repository on GitHub (`https://github.com/your-username/savvpro-test-statement-categorizer`).
-2. Click **Compare & pull request** (GitHub will show this banner after you push your branch).
-3. Ensure the following settings in the PR form:
-   - **Base repository:** `savvpro/savvpro-test-statement-categorizer` ← the original repo
-   - **Base branch:** `main`
-   - **Head repository:** `your-username/savvpro-test-statement-categorizer` ← your fork
-   - **Compare branch:** `candidate-<your-github-username>`
-4. Use the title: `feat: complete statement-categorizer assessment`
-5. Submit the pull request.
-
-> 💡 **Tip:** If you don't see the banner, go to the original repo (`savvpro/savvpro-test-statement-categorizer`), click the **Pull requests** tab, then click **New pull request** → **compare across forks**.
-
----
-
-> ⚠️ **Important:** No submissions will be accepted after the deadline.
+**Assessment submission:** developed on branch `candidate-attaquarks` in
+[attaquarks/savvpro-test-statement-categorizer](https://github.com/attaquarks/savvpro-test-statement-categorizer),
+submitted as a PR against `savvpro/savvpro-test-statement-categorizer:main`.
+See [DESIGN.md](DESIGN.md) for the decision-engine design and
+[AI_USAGE.md](AI_USAGE.md) for AI tool usage.
