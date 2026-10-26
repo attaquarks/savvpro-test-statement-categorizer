@@ -53,25 +53,31 @@ the ZCode agent under the user's direction; no code was copied from another huma
 
 ## Token usage
 
-**No verifiable token counts can be reported here.** The ZCode harness does not expose
-per-request or per-session token usage to the agent, and there is no usage log inside this
-workspace to quote. Fabricating a number (or a screenshot of one) would be worse than
-saying so — this assessment's rule is honest evidence only.
+Usage figures below were read from the ZCode desktop app's session details by the
+repository owner (the agent harness itself cannot see token counters, which is why they
+are reported here rather than by the agent during the session).
 
-> **Evidence to add manually (required for submission):** token/usage figures for this
-> session must be pulled by the repository owner from the places that can see them —
-> the ZCode desktop app's session details, or the Z.ai / `zai-start-plan` account
-> console's usage page for 2026-10-26 — and pasted below (or attached as a screenshot
-> alongside this file).
+| Metric | Value |
+| --- | --- |
+| Platform | ZCode |
+| Model | GLM 5.3 Flash (Z.ai) |
+| Tokens consumed | 8M |
+| Cache (cached input reads) | 7.7M |
+| Output tokens | 170k |
 
-```
-Session date:   2026-10-26
-Tool / model:   ZCode — GLM-5.3-Flash (zai-start-plan)
-Tokens in:      <MANUALLY ADD — see note above>
-Tokens out:     <MANUALLY ADD — see note above>
-Session cost:   <OPTIONAL, MANUALLY ADD>
-Evidence:       <paste log excerpt or add screenshot reference>
-```
+**Context consumption** (peak context window use, 155.9K of 1M — 15.6%):
+
+| Context slice | Share |
+| --- | --- |
+| Messages | 79.2% |
+| System tools | 15% |
+| MCP tools | 3.5% |
+| Skills | 1.2% |
+| System prompt | 1.1% |
+
+Session date: 2026-10-26. Numbers above are the owner-provided session figures; the raw
+session log lives in the ZCode app and was not committed (it can contain unrelated
+workspace context).
 
 ## Data hygiene
 
