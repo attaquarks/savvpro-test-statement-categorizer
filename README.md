@@ -126,6 +126,7 @@ both by unit/API tests and by end-to-end browser runs:
 | Discover card | `Trans. Date, Post Date, Description, Amount (signed), Category` | Automatic (signed) |
 | American Express | Charges listed **positive**, payments negative | **"Charges are positive"** upload option — never auto-guessed |
 | Wells Fargo checking | Headerless rows: `Date, Amount, Check number, Description` | Automatic (strictly shaped headerless fallback) |
+| Indian-bank exports (e.g. SBI-style datasets) | `date, DrCr (Db/Cr), amount, balance, mode, name, …` | Automatic — `DrCr` sets the sign; empty `name` falls back to `mode`; ATM/NEFT/IMPS/RTGS = transfers; PhonePe/Flipkart/GPay = Needs Review (ambiguous) |
 
 Screenshots of the app processing the first, second and last of these through the real
 UI: `docs/screenshots/realworld-*.png` (fake data).

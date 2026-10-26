@@ -59,7 +59,14 @@ DESCRIPTION_ALIASES = {
 AMOUNT_ALIASES = {"amt", "value", "amount usd", "signed amount"}
 DEBIT_ALIASES = {"debit amount", "money out", "withdrawal", "withdrawals"}
 CREDIT_ALIASES = {"credit amount", "money in", "deposit", "deposits"}
-TYPE_ALIASES = {"transaction type", "txn type"}
+# "DrCr" is the sign column in common Indian-bank exports (e.g. the widely
+# used Kaggle bank-transaction datasets): Db = debit, Cr = credit.
+TYPE_ALIASES = {"transaction type", "txn type", "drcr", "dr cr"}
+
+# Fallback description sources: several real exports split the free text
+# across two columns (e.g. name + mode / remarks / particulars). When the
+# primary description cell is empty, the secondary one is used.
+SECONDARY_DESCRIPTION_ALIASES = {"mode", "remarks", "narration", "particulars"}
 
 # Header names that win over the looser aliases above. Chase credit-card
 # exports carry both "Details" (a Debit/Credit column) and "Description" —
@@ -77,8 +84,8 @@ PRIMARY_ALIASES = {
 # Type-column values whose wording definitively says which side of the
 # statement the money is on. "payment" is deliberately absent: on a card
 # statement it is a credit, on a checking statement it is often a debit.
-CREDIT_TYPE_WORDS = {"CREDIT", "CR", "DEPOSIT", "REFUND", "RETURN"}
-DEBIT_TYPE_WORDS = {"DEBIT", "DR", "WITHDRAWAL", "PURCHASE", "SALE", "CHARGE", "FEE", "FEES"}
+CREDIT_TYPE_WORDS = {"CREDIT", "CR", "CRT", "DEPOSIT", "REFUND", "RETURN"}
+DEBIT_TYPE_WORDS = {"DEBIT", "DR", "DB", "DBT", "WITHDRAWAL", "PURCHASE", "SALE", "CHARGE", "FEE", "FEES"}
 
 
 def sign_from_type(value: str) -> Optional[int]:
@@ -144,6 +151,7 @@ def _find_header(rows: list[list[str]]):
         return idx, {
             "date": date_col,
             "description": desc_col,
+            "secondary_description": _find_column(header, SECONDARY_DESCRIPTION_ALIASES),
             "amount": amount_col,
             "debit": debit_col,
             "credit": credit_col,
@@ -275,6 +283,8 @@ def parse_csv(data: bytes, charge_sign: str = "negative") -> ParseOutcome:
             date = None
 
         description = _cell(row, cols["description"])
+        if not description:
+            description = _cell(row, cols["secondary_description"])
         if not description:
             problems.append("missing description")
 

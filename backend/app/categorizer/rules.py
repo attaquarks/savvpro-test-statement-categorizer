@@ -69,6 +69,12 @@ TRANSFER_RULES = [
     _type_rule("T-CREDIT-CARD", cat.TRANSFER, "CREDIT", "CARD"),
     _type_rule("T-WIRE-OUT", cat.TRANSFER, "WIRE", "OUT"),
     _type_rule("T-WIRE-TO", cat.TRANSFER, "WIRE", "TO"),
+    # Cash movements and inter-bank rails: money changing form/places, not
+    # spending on a category.
+    _type_rule("T-ATM", cat.TRANSFER, "ATM"),
+    _type_rule("T-NEFT", cat.TRANSFER, "NEFT"),
+    _type_rule("T-IMPS", cat.TRANSFER, "IMPS"),
+    _type_rule("T-RTGS", cat.TRANSFER, "RTGS"),
 ]
 
 INCOME_RULES = [
@@ -169,6 +175,10 @@ AMBIGUOUS_RULES = [
     KeywordRule("A-TARGET", ("TARGET",), cat.NEEDS_REVIEW, merchant="Target", ambiguous=True),
     KeywordRule("A-PAYPAL", ("PAYPAL",), cat.NEEDS_REVIEW, merchant="PayPal", ambiguous=True),
     KeywordRule("A-APPLE", ("APPLE",), cat.NEEDS_REVIEW, merchant="Apple", ambiguous=True),
+    KeywordRule("A-PHONEPE", ("PHONEPE",), cat.NEEDS_REVIEW, merchant="PhonePe", ambiguous=True),
+    KeywordRule("A-FLIPKART", ("FLIPKART",), cat.NEEDS_REVIEW, merchant="Flipkart", ambiguous=True),
+    KeywordRule("A-GOOGLE-PAY", ("GOOGLE", "PAY"), cat.NEEDS_REVIEW, merchant="Google Pay", ambiguous=True),
+    KeywordRule("A-GPAY", ("GPAY",), cat.NEEDS_REVIEW, merchant="Google Pay (GPAY)", ambiguous=True),
 ]
 
 

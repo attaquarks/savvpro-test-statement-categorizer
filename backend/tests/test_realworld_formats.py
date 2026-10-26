@@ -177,6 +177,46 @@ def test_wells_fargo_style_headerless_export_parses():
     assert _by_description(transactions, "REFUND").refund_category == cat.SOFTWARE
 
 
+# --- Indian-bank layout: DrCr sign column + mode/name columns -----------------
+
+
+def test_indian_drcr_layout_signs_and_fallback_description():
+    # Kaggle-style Indian bank export: positive Amounts + a DrCr column
+    # (Db/Cr), free text split across "name" (often empty) and "mode".
+    outcome = parse_csv(_fixture("indian_drcr_style.csv").encode("utf-8"))
+    assert [t.amount_cents for t in outcome.transactions] == [
+        -1000000,  # Db 10000.0
+        -93000,    # Db 930.0
+        -200000,   # Db 2000.0
+        240000,    # Cr 2400.0
+        -500000,   # Db 5000.0
+        709,       # Cr 7.09
+        -14200,    # Db 142.0
+        5252100,   # Cr 52521.0
+    ]
+    # Rows with an empty name fall back to the mode column instead of being skipped.
+    descriptions = [t.description for t in outcome.transactions]
+    assert "" not in descriptions
+    assert "ATM" in descriptions and "NEFT" in descriptions
+
+
+def test_indian_drcr_layout_categorization():
+    transactions = _parse("indian_drcr_style.csv")
+
+    def row(needle):
+        return _by_description(transactions, needle)
+
+    # Cash + inter-bank rails are transfers, excluded from spending/income.
+    assert row("ATM").category == cat.TRANSFER
+    assert row("NEFT").category == cat.TRANSFER
+    # Payment apps and marketplaces are ambiguous by name, not guessed.
+    assert row("FLIPKART").category == cat.NEEDS_REVIEW
+    assert row("PHONEPE").category == cat.NEEDS_REVIEW
+    assert "marketplace" in row("FLIPKART").reason
+    # Truly unknown rows still need review.
+    assert row("SAMPLEMERCHANT").category == cat.NEEDS_REVIEW
+
+
 def test_headerless_fallback_requires_date_and_amount_shape():
     with pytest.raises(StatementFormatError):
         parse_csv(b"first,line,looks,nothing,like,dates\nsecond,line,also,not\n")
